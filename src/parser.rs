@@ -131,12 +131,12 @@ impl<'a> Parser<'a> {
         let stmt = match *self.current() {
             Token::Let => {
                 self.next();
-                try!(self.parse_binding())
+                self.parse_binding()?
             },
-            _ => Stmt::Eval(try!(self.parse_expr())),
+            _ => Stmt::Eval(self.parse_expr()?),
         };
 
-        try!(self.assert_current(Token::Eof));
+        self.assert_current(Token::Eof)?;
         Result::Ok(stmt)
     }
 
@@ -337,36 +337,36 @@ impl<'a> Parser<'a> {
         let expr = match *self.next() {
             Token::Integer(n) => integer_expr(n),
             Token::Float(f) => float_expr(f),
-            Token::Minus => Expr::Neg(try!(self.parse_atom()).boxed()),
-            Token::Tilde => Expr::BitwiseNot(try!(self.parse_atom()).boxed()),
-            Token::Sqrt => Expr::Sqrt(try!(self.parse_atom()).boxed()),
-            Token::Sin => Expr::Sin(try!(self.parse_atom()).boxed()),
-            Token::Cos => Expr::Cos(try!(self.parse_atom()).boxed()),
-            Token::Tan => Expr::Tan(try!(self.parse_atom()).boxed()),
-            Token::Asin => Expr::Asin(try!(self.parse_atom()).boxed()),
-            Token::Acos => Expr::Acos(try!(self.parse_atom()).boxed()),
-            Token::Atan => Expr::Atan(try!(self.parse_atom()).boxed()),
-            Token::Len => Expr::Len(try!(self.parse_atom()).boxed()),
-            Token::Count => Expr::Count(try!(self.parse_atom()).boxed()),
+            Token::Minus => Expr::Neg(self.parse_atom()?.boxed()),
+            Token::Tilde => Expr::BitwiseNot(self.parse_atom()?.boxed()),
+            Token::Sqrt => Expr::Sqrt(self.parse_atom()?.boxed()),
+            Token::Sin => Expr::Sin(self.parse_atom()?.boxed()),
+            Token::Cos => Expr::Cos(self.parse_atom()?.boxed()),
+            Token::Tan => Expr::Tan(self.parse_atom()?.boxed()),
+            Token::Asin => Expr::Asin(self.parse_atom()?.boxed()),
+            Token::Acos => Expr::Acos(self.parse_atom()?.boxed()),
+            Token::Atan => Expr::Atan(self.parse_atom()?.boxed()),
+            Token::Len => Expr::Len(self.parse_atom()?.boxed()),
+            Token::Count => Expr::Count(self.parse_atom()?.boxed()),
             Token::Ident(ref s) => {
                 let ident = s.clone();
                 match *self.current() {
                     Token::LParen => {
                         self.next();
-                        let args = try!(self.parse_fun_call());
+                        let args = self.parse_fun_call()?;
                         Expr::FunCall(ident, args.boxed())
                     },
                     _ => Expr::BindingRef(ident),
                 }
             },
-            Token::LBracket => try!(self.parse_vector()),
+            Token::LBracket => self.parse_vector()?,
             Token::LParen => {
-                let inner = try!(self.parse_term());
-                try!(self.assert_current(Token::RParen));
+                let inner = self.parse_term()?;
+                self.assert_current(Token::RParen)?;
                 self.next();
                 inner
             },
-            _ => try!(Result::Err(format!("Expected atom, found {:?}", self.current()))),
+            _ => Result::Err(format!("Expected atom, found {:?}", self.current()))?,
         };
 
         Result::Ok(expr)
@@ -383,8 +383,8 @@ impl<'a> Parser<'a> {
                 vec![]
             },
             _ => {
-                let exprs = try!(self.parse_expr_list());
-                try!(self.assert_current(Token::RParen));
+                let exprs = self.parse_expr_list()?;
+                self.assert_current(Token::RParen)?;
                 self.next();
                 exprs
             },
@@ -399,7 +399,7 @@ impl<'a> Parser<'a> {
     fn parse_expr_list<'s>(&'s mut self) -> Result<Vec<Expr>, String> {
         let mut exprs = Vec::new();
         loop {
-            exprs.push(try!(self.parse_expr()));
+            exprs.push(self.parse_expr()?);
 
             match *self.current() {
                 Token::Comma => self.next(),
@@ -416,24 +416,24 @@ impl<'a> Parser<'a> {
     // [0..10:2]
     //  ^
     fn parse_vector<'s>(&'s mut self) -> Result<Expr, String> {
-        let expr1 = try!(self.parse_expr());
+        let expr1 = self.parse_expr()?;
         let res_expr = match *self.next() {
             Token::RBracket => Expr::Vector(vec![expr1].boxed()),
             Token::Comma => {
-                let mut tail_exprs = try!(self.parse_expr_list());
-                try!(self.assert_current(Token::RBracket));
+                let mut tail_exprs = self.parse_expr_list()?;
+                self.assert_current(Token::RBracket)?;
                 self.next();
                 let mut exprs = vec![expr1];
                 exprs.append(&mut tail_exprs);
                 Expr::Vector(exprs.boxed())
             },
             Token::DotDot => {
-                let range = try!(self.parse_range(expr1));
-                try!(self.assert_current(Token::RBracket));
+                let range = self.parse_range(expr1)?;
+                self.assert_current(Token::RBracket)?;
                 self.next();
                 Expr::RangeVector(range.boxed())
             },
-            _ => try!(Result::Err(format!("Expected Comma, RBracket or DotDot, found {:?}", self.current()))),
+            _ => Result::Err(format!("Expected Comma, RBracket or DotDot, found {:?}", self.current()))?,
         };
 
         Result::Ok(res_expr)
@@ -443,10 +443,10 @@ impl<'a> Parser<'a> {
     // [0..10:2]
     //     ^
     fn parse_range<'s>(&'s mut self, lower: Expr) -> Result<Range, String> {
-        let upper = try!(self.parse_expr());
+        let upper = self.parse_expr()?;
         let step = if *self.current() == Token::Colon {
             self.next();
-            try!(self.parse_expr())
+            self.parse_expr()?
         } else {
             integer_expr(1)
         };
@@ -643,7 +643,7 @@ mod tests {
         assert_eq!(stmt,
                    Stmt::FunBind("f".to_string(), vec!["a".to_string(), "b".to_string()], integer_expr(1)));
     }
-    
+
     #[test]
     fn test_parse_function_call_1() {
         // f()
@@ -696,7 +696,7 @@ mod tests {
                               Box::new(vec![integer_expr(1),
                                             Expr::Plus(integer_expr(2).boxed(), integer_expr(3).boxed())]))));
     }
-    
+
     #[test]
     fn test_atoms() {
         let input = vec![Token::Sqrt, Token::Integer(16)];
@@ -711,7 +711,7 @@ mod tests {
         let stmt = parse(&input).unwrap();
         assert_eq!(stmt, Stmt::Eval(Expr::Neg(Expr::Sin(integer_expr(10).boxed()).boxed())));
     }
-    
+
     #[test]
     fn test_vector_single_item() {
         let input = vec![Token::LBracket, Token::Integer(1), Token::RBracket];

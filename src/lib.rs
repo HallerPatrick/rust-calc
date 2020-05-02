@@ -1,25 +1,25 @@
-extern crate regex;
-#[macro_use]
 extern crate lazy_static;
 extern crate num;
+extern crate regex;
 #[macro_use]
 extern crate log;
 
+mod interpreter;
 mod lexer;
 mod parser;
-mod value;
-mod interpreter;
 mod util;
+mod value;
 
-use std::collections::HashMap;
-use std::thread;
-use std::io::{ BufWriter, Write };
 use interpreter::Context;
 use lexer::Lexer;
+use regex::Regex;
+use std::collections::HashMap;
+use std::io::{BufWriter, Write};
+use std::thread;
 use util::Boxable;
 
-pub use value::Value;
 pub use interpreter::RuntimeItem;
+pub use value::Value;
 
 /// The identifier for the result of the last evaluation.
 ///
@@ -46,6 +46,7 @@ pub static IT_IDENT: &'static str = "it";
 pub struct Calculator {
     ctx: Box<Context>,
     lexer: Lexer,
+    arithm_regex: Regex,
 }
 
 impl Calculator {
@@ -54,11 +55,21 @@ impl Calculator {
         let ctx = {
             let mut map: HashMap<String, RuntimeItem> = HashMap::new();
             map.insert(IT_IDENT.to_string(), RuntimeItem::Value(Value::Integer(0)));
-            map.insert("pi".to_string(), RuntimeItem::Value(Value::Float(std::f64::consts::PI)));
-            map.insert("e".to_string(), RuntimeItem::Value(Value::Float(std::f64::consts::E)));
+            map.insert(
+                "pi".to_string(),
+                RuntimeItem::Value(Value::Float(std::f64::consts::PI)),
+            );
+            map.insert(
+                "e".to_string(),
+                RuntimeItem::Value(Value::Float(std::f64::consts::E)),
+            );
             interpreter::context_from_hashmap(map)
         };
-        Calculator { ctx: ctx, lexer: Lexer::new() }
+        Calculator {
+            ctx,
+            lexer: Lexer::new(),
+            arithm_regex: Regex::new(r#"^\$[ ]*[0-9\(\)\+\-\*\./ ]*[0-9\)\./]$"#).unwrap(),
+        }
     }
 
     /// Parses and evaluates the specified source.
@@ -90,13 +101,13 @@ impl Calculator {
     ///            Result::Ok(&RuntimeItem::Value(Value::Integer(2))));
     /// ```
     pub fn calc(&mut self, src: &str) -> Result<&RuntimeItem, String> {
-        let input = try!(self.lexer.lex(&src));
+        let input = self.lexer.lex(&src)?;
         info!("Tokens: {:?}", input);
 
-        let stmt = try!(parser::parse(&input));
+        let stmt = parser::parse(&input)?;
         info!("Ast: {:?}", stmt);
 
-        let item = try!(interpreter::interpret(&stmt, &mut *self.ctx));
+        let item = interpreter::interpret(&stmt, &mut *self.ctx)?;
         self.ctx.put(IT_IDENT, item);
         Result::Ok(self.ctx.get(IT_IDENT).unwrap())
     }
@@ -129,7 +140,7 @@ impl Calculator {
                 let _ = local_calc.calc(&src).unwrap();
                 local_calc.get_context()
             }));
-        };
+        }
 
         let mut its = vec![];
         for thread in threads {
@@ -137,11 +148,11 @@ impl Calculator {
                 Result::Ok(map) => {
                     for (ident, item) in map.iter() {
                         self.ctx.put(ident, item.clone());
-                    };
+                    }
                     if let &RuntimeItem::Value(ref val) = map.get(IT_IDENT).unwrap() {
                         its.push(val.clone());
                     };
-                },
+                }
                 Result::Err(x) => error!("{:?}", x),
             }
         }
@@ -160,15 +171,27 @@ impl Calculator {
             items.sort_by_key(|&(ident, _)| ident);
             items
         };
-        try!(writer.write_all(b"{\n"));
+        writer.write_all(b"{\n")?;
         for (ident, item) in item_tuples {
             if let &RuntimeItem::Value(ref val) = item {
-                try!(write!(writer, "    \"{}\": ", &ident));
-                try!(val.write_json(writer));
-                try!(writer.write_all(b",\n"));
+                write!(writer, "    \"{}\": ", &ident)?;
+                val.write_json(writer)?;
+                writer.write_all(b",\n")?;
             }
         }
         writer.write_all(b"}")
+    }
+
+    /// Determines wether the input string is a valid arithmetic expression
+    ///
+    /// All arithmetic expression have to start with a "$"
+    ///
+    /// E.g.:
+    ///       $ 1 + 1    -> Valid
+    ///       1 + 1      -> Invalid
+    ///       $ 3 + test -> Invalid
+    pub fn is_arithmetic_expression(&self, expr: &str) -> bool {
+        self.arithm_regex.is_match(expr)
     }
 }
 
@@ -177,7 +200,11 @@ impl Calculator {
 impl Calculator {
     fn with_context(map: HashMap<String, RuntimeItem>) -> Calculator {
         let ctx = interpreter::context_from_hashmap(map);
-        Calculator { ctx: ctx, lexer: Lexer::new() }
+        Calculator {
+            ctx,
+            lexer: Lexer::new(),
+            arithm_regex: Regex::new(r#"^\$[ ]*[0-9\(\)\+\-\*\./ ]*[0-9\)\./]$"#).unwrap(),
+        }
     }
 
     fn get_context(&self) -> HashMap<String, RuntimeItem> {

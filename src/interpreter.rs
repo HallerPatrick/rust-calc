@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::cmp::Ordering;
 use parser::{Expr, Stmt};
-use value::Value;
+use std::cmp::Ordering;
+use std::collections::HashMap;
 use util::Boxable;
+use value::Value;
 
 /// The entities that result from interpretation and that are stored in a
 /// `Context`.
@@ -17,23 +17,23 @@ pub enum RuntimeItem {
 /// Interprets the given `Stmt`, using the specified `Context` for binding
 /// lookup and storage. Returns either the resulting `RuntimeItem` if successful
 /// or an error message.
-pub fn interpret(stmt: &Stmt, ctx: &mut Context) -> Result<RuntimeItem, String> {
+pub fn interpret(stmt: &Stmt, ctx: &mut dyn Context) -> Result<RuntimeItem, String> {
     let item = match *stmt {
         Stmt::VarBind(ref ident, ref expr) => {
-            let val = try!(eval_expr(expr, ctx));
+            let val = eval_expr(expr, ctx)?;
             let item = RuntimeItem::Value(val);
             ctx.put(ident, item.clone());
             item
-        },
+        }
         Stmt::FunBind(ref ident, ref param_idents, ref expr) => {
             let item = RuntimeItem::Function(param_idents.clone(), expr.clone());
             ctx.put(ident, item.clone());
             item
-        },
+        }
         Stmt::Eval(ref expr) => {
-            let val = try!(eval_expr(expr, ctx));
+            let val = eval_expr(expr, ctx)?;
             RuntimeItem::Value(val)
-        },
+        }
     };
 
     Result::Ok(item)
@@ -42,98 +42,77 @@ pub fn interpret(stmt: &Stmt, ctx: &mut Context) -> Result<RuntimeItem, String> 
 /// Evaluates the given expression and returns the result.
 /// The given `Context` stores the variables that can be addressed
 /// through identifiers.
-pub fn eval_expr(expr: &Expr, ctx: &Context) -> Result<Value, String> {
+pub fn eval_expr(expr: &Expr, ctx: &dyn Context) -> Result<Value, String> {
     let val = match *expr {
-        Expr::Plus(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)) + try!(eval_expr(&*right, ctx)),
-        Expr::Minus(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)) - try!(eval_expr(&*right, ctx)),
-        Expr::BitwiseAnd(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)) & try!(eval_expr(&*right, ctx)),
-        Expr::BitwiseOr(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)) | try!(eval_expr(&*right, ctx)),
-        Expr::BitwiseXor(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)) ^ try!(eval_expr(&*right, ctx)),
-        Expr::Times(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)) * try!(eval_expr(&*right, ctx)),
-        Expr::Div(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)) / try!(eval_expr(&*right, ctx)),
-        Expr::IntDiv(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)).integer_divide_by(&try!(eval_expr(&*right, ctx))),
-        Expr::Mod(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)) % try!(eval_expr(&*right, ctx)),
-        Expr::ShiftLeft(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)) << try!(eval_expr(&*right, ctx)),
-        Expr::ShiftRight(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)) >> try!(eval_expr(&*right, ctx)),
-        Expr::DotProduct(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)).dot_product(&try!(eval_expr(&*right, ctx))),
-        Expr::Pow(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)).pow(&try!(eval_expr(&*right, ctx))),
-        Expr::Log(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)).log(&try!(eval_expr(&*right, ctx))),
-        Expr::Concat(ref left, ref right) =>
-            try!(eval_expr(&*left, ctx)).concat(&try!(eval_expr(&*right, ctx))),
-        Expr::Neg(ref inner) =>
-            -try!(eval_expr(&*inner, ctx)),
-        Expr::BitwiseNot(ref inner) =>
-            !try!(eval_expr(&*inner, ctx)),
-        Expr::Sqrt(ref inner) =>
-            try!(eval_expr(&*inner, ctx)).sqrt(),
-        Expr::Sin(ref inner) =>
-            try!(eval_expr(&*inner, ctx)).sin(),
-        Expr::Cos(ref inner) =>
-            try!(eval_expr(&*inner, ctx)).cos(),
-        Expr::Tan(ref inner) =>
-            try!(eval_expr(&*inner, ctx)).tan(),
-        Expr::Asin(ref inner) =>
-            try!(eval_expr(&*inner, ctx)).asin(),
-        Expr::Acos(ref inner) =>
-            try!(eval_expr(&*inner, ctx)).acos(),
-        Expr::Atan(ref inner) =>
-            try!(eval_expr(&*inner, ctx)).atan(),
-        Expr::Len(ref inner) =>
-            try!(eval_expr(&*inner, ctx)).len(),
-        Expr::Count(ref inner) =>
-            try!(eval_expr(&*inner, ctx)).count(),
+        Expr::Plus(ref left, ref right) => eval_expr(&*left, ctx)? + eval_expr(&*right, ctx)?,
+        Expr::Minus(ref left, ref right) => eval_expr(&*left, ctx)? - eval_expr(&*right, ctx)?,
+        Expr::BitwiseAnd(ref left, ref right) => eval_expr(&*left, ctx)? & eval_expr(&*right, ctx)?,
+        Expr::BitwiseOr(ref left, ref right) => eval_expr(&*left, ctx)? | eval_expr(&*right, ctx)?,
+        Expr::BitwiseXor(ref left, ref right) => eval_expr(&*left, ctx)? ^ eval_expr(&*right, ctx)?,
+        Expr::Times(ref left, ref right) => eval_expr(&*left, ctx)? * eval_expr(&*right, ctx)?,
+        Expr::Div(ref left, ref right) => eval_expr(&*left, ctx)? / eval_expr(&*right, ctx)?,
+        Expr::IntDiv(ref left, ref right) => {
+            eval_expr(&*left, ctx)?.integer_divide_by(&eval_expr(&*right, ctx)?)
+        }
+        Expr::Mod(ref left, ref right) => eval_expr(&*left, ctx)? % eval_expr(&*right, ctx)?,
+        Expr::ShiftLeft(ref left, ref right) => eval_expr(&*left, ctx)? << eval_expr(&*right, ctx)?,
+        Expr::ShiftRight(ref left, ref right) => {
+            eval_expr(&*left, ctx)? >> eval_expr(&*right, ctx)?
+        }
+        Expr::DotProduct(ref left, ref right) => {
+            eval_expr(&*left, ctx)?.dot_product(&eval_expr(&*right, ctx)?)
+        }
+        Expr::Pow(ref left, ref right) => eval_expr(&*left, ctx)?.pow(&eval_expr(&*right, ctx)?),
+        Expr::Log(ref left, ref right) => eval_expr(&*left, ctx)?.log(&eval_expr(&*right, ctx)?),
+        Expr::Concat(ref left, ref right) => {
+            eval_expr(&*left, ctx)?.concat(&eval_expr(&*right, ctx)?)
+        }
+        Expr::Neg(ref inner) => -eval_expr(&*inner, ctx)?,
+        Expr::BitwiseNot(ref inner) => !eval_expr(&*inner, ctx)?,
+        Expr::Sqrt(ref inner) => eval_expr(&*inner, ctx)?.sqrt(),
+        Expr::Sin(ref inner) => eval_expr(&*inner, ctx)?.sin(),
+        Expr::Cos(ref inner) => eval_expr(&*inner, ctx)?.cos(),
+        Expr::Tan(ref inner) => eval_expr(&*inner, ctx)?.tan(),
+        Expr::Asin(ref inner) => eval_expr(&*inner, ctx)?.asin(),
+        Expr::Acos(ref inner) => eval_expr(&*inner, ctx)?.acos(),
+        Expr::Atan(ref inner) => eval_expr(&*inner, ctx)?.atan(),
+        Expr::Len(ref inner) => eval_expr(&*inner, ctx)?.len(),
+        Expr::Count(ref inner) => eval_expr(&*inner, ctx)?.count(),
         Expr::BindingRef(ref s) => {
             let res = match ctx.get(s) {
-                Some(item) => {
-                    match *item {
-                        RuntimeItem::Value(ref v) => Result::Ok(v.clone()),
-                        _ => Result::Err(format!("'{}' is not a value", s)),
-                    }
+                Some(item) => match *item {
+                    RuntimeItem::Value(ref v) => Result::Ok(v.clone()),
+                    _ => Result::Err(format!("'{}' is not a value", s)),
                 },
-                None => Result::Err(format!("Identifier '{}' not found", s)), 
+                None => Result::Err(format!("Identifier '{}' not found", s)),
             };
-            try!(res)
-        },
+            res?
+        }
         Expr::FunCall(ref s, ref args) => {
             let res = match ctx.get(s) {
-                Some(item) => {
-                    match *item {
-                        RuntimeItem::Function(ref param_idents, ref body_expr) =>
-                            call_function(param_idents, args, body_expr, ctx),
-                        _ => Result::Err(format!("'{}' is not a function", s)),
+                Some(item) => match *item {
+                    RuntimeItem::Function(ref param_idents, ref body_expr) => {
+                        call_function(param_idents, args, body_expr, ctx)
                     }
+                    _ => Result::Err(format!("'{}' is not a function", s)),
                 },
-                None => Result::Err(format!("Identifier '{}' not found", s)), 
+                None => Result::Err(format!("Identifier '{}' not found", s)),
             };
-            try!(res)
-        },
+            res?
+        }
         Expr::Literal(ref v) => v.clone(),
         Expr::Vector(ref exprs) => {
             let mut values = vec![];
             for ref e in (*exprs).iter() {
-                values.push(try!(eval_expr(e, ctx)));
+                values.push(eval_expr(e, ctx)?);
             }
             Value::Vector(values.arc())
-        },
+        }
         Expr::RangeVector(ref range) => {
             let mut values = vec![];
-            let mut value = try!(eval_expr(&range.incl_lower_bound, ctx));
-            let upper_val = try!(eval_expr(&range.excl_upper_bound, ctx));
-            let step_val = try!(eval_expr(&range.step, ctx));
+            let mut value = eval_expr(&range.incl_lower_bound, ctx)?;
+            let upper_val = eval_expr(&range.excl_upper_bound, ctx)?;
+            let step_val = eval_expr(&range.step, ctx)?;
             loop {
                 values.push(value.clone());
                 value = value + step_val.clone();
@@ -166,7 +145,7 @@ pub trait Context {
 
 /// Returns a boxed object that implements the `Context` trait based
 /// on the given `map` that is used to keep variable values.
-pub fn context_from_hashmap(map: HashMap<String, RuntimeItem>) -> Box<Context> {
+pub fn context_from_hashmap(map: HashMap<String, RuntimeItem>) -> Box<dyn Context> {
     Box::new(MapContext { map: map })
 }
 
@@ -195,13 +174,15 @@ impl Context for MapContext {
 
 struct StackedContext<'a> {
     head: MapContext,
-    next: &'a Context,
+    next: &'a dyn Context,
 }
 
 impl<'a> StackedContext<'a> {
-    fn new(next: &'a Context) -> StackedContext {
-        let map = MapContext { map: HashMap::new() };
-        StackedContext { head: map, next: next }
+    fn new(next: &'a dyn Context) -> StackedContext {
+        let map = MapContext {
+            map: HashMap::new(),
+        };
+        StackedContext { head: map, next }
     }
 }
 
@@ -225,11 +206,16 @@ impl<'a> Context for StackedContext<'a> {
     }
 }
 
-fn call_function(param_idents: &Vec<String>, args: &Vec<Expr>, body: &Expr, ctx: &Context) -> Result<Value, String> {
+fn call_function(
+    param_idents: &Vec<String>,
+    args: &Vec<Expr>,
+    body: &Expr,
+    ctx: &dyn Context,
+) -> Result<Value, String> {
     let min_len = ::std::cmp::min(param_idents.len(), args.len());
     let mut head_ctx = StackedContext::new(ctx);
     for i in 0..min_len {
-        let arg_val = try!(eval_expr(&args[i], ctx));
+        let arg_val = eval_expr(&args[i], ctx)?;
         head_ctx.put(&param_idents[i], RuntimeItem::Value(arg_val));
     }
     eval_expr(body, &head_ctx)
@@ -238,12 +224,12 @@ fn call_function(param_idents: &Vec<String>, args: &Vec<Expr>, body: &Expr, ctx:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parser::{Expr, Stmt, integer_expr, float_expr};
-    use value::Value;
-    use util::Boxable;
+    use parser::{float_expr, integer_expr, Expr, Stmt};
     use std::collections::HashMap;
+    use util::Boxable;
+    use value::Value;
 
-    fn ctx() -> Box<Context> {
+    fn ctx() -> Box<dyn Context> {
         context_from_hashmap(HashMap::new())
     }
 
@@ -266,9 +252,10 @@ mod tests {
     #[test]
     fn test_eval_complex() {
         // (1 + 2) * (5 - 3.0)
-        let expr =
-            Expr::Times(Expr::Plus(integer_expr(1).boxed(), integer_expr(2).boxed()).boxed(),
-                        Expr::Minus(integer_expr(5).boxed(), float_expr(3.0).boxed()).boxed());
+        let expr = Expr::Times(
+            Expr::Plus(integer_expr(1).boxed(), integer_expr(2).boxed()).boxed(),
+            Expr::Minus(integer_expr(5).boxed(), float_expr(3.0).boxed()).boxed(),
+        );
         let res = eval_expr(&expr, &mut *ctx()).unwrap();
         assert_eq!(res, Value::Float(6.0));
     }
@@ -276,7 +263,10 @@ mod tests {
     #[test]
     fn test_eval_negate() {
         // 1 - -2
-        let expr = Expr::Minus(integer_expr(1).boxed(), Expr::Neg(integer_expr(2).boxed()).boxed());
+        let expr = Expr::Minus(
+            integer_expr(1).boxed(),
+            Expr::Neg(integer_expr(2).boxed()).boxed(),
+        );
         let res = eval_expr(&expr, &mut *ctx()).unwrap();
         assert_eq!(res, Value::Integer(3));
     }
@@ -312,7 +302,10 @@ mod tests {
         // f(123)
         let expr = Expr::FunCall("f".to_string(), Box::new(vec![integer_expr(123)]));
         let mut ctx = ctx();
-        (*ctx).put("f", RuntimeItem::Function(vec!["x".to_string()], Expr::BindingRef("x".to_string())));
+        (*ctx).put(
+            "f",
+            RuntimeItem::Function(vec!["x".to_string()], Expr::BindingRef("x".to_string())),
+        );
         let res = eval_expr(&expr, &mut *ctx).unwrap();
         assert_eq!(res, Value::Integer(123));
     }
@@ -343,19 +336,32 @@ mod tests {
         let mut ctx = ctx();
         let res = interpret(&stmt, &mut *ctx).unwrap();
         assert_eq!(res, RuntimeItem::Function(vec![], integer_expr(1)));
-        assert_eq!(ctx.get("f"), Some(&RuntimeItem::Function(vec![], integer_expr(1))));
+        assert_eq!(
+            ctx.get("f"),
+            Some(&RuntimeItem::Function(vec![], integer_expr(1)))
+        );
     }
 
     #[test]
     fn test_interpret_fun_bind_2() {
         // let f(x) = x
-        let stmt = Stmt::FunBind("f".to_string(),
-                                 vec!["x".to_string()],
-                                 Expr::BindingRef("x".to_string()));
+        let stmt = Stmt::FunBind(
+            "f".to_string(),
+            vec!["x".to_string()],
+            Expr::BindingRef("x".to_string()),
+        );
         let mut ctx = ctx();
         let res = interpret(&stmt, &mut *ctx).unwrap();
-        assert_eq!(res, RuntimeItem::Function(vec!["x".to_string()], Expr::BindingRef("x".to_string())));
-        assert_eq!(ctx.get("f"),
-                   Some(&RuntimeItem::Function(vec!["x".to_string()], Expr::BindingRef("x".to_string()))));
+        assert_eq!(
+            res,
+            RuntimeItem::Function(vec!["x".to_string()], Expr::BindingRef("x".to_string()))
+        );
+        assert_eq!(
+            ctx.get("f"),
+            Some(&RuntimeItem::Function(
+                vec!["x".to_string()],
+                Expr::BindingRef("x".to_string())
+            ))
+        );
     }
 }
