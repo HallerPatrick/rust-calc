@@ -1,6 +1,6 @@
 use lexer::Token;
-use value::Value;
 use util::Boxable;
+use value::Value;
 
 /// Defines the syntax elements that can be the AST root.
 #[derive(Debug, PartialEq)]
@@ -65,10 +65,7 @@ pub struct Range {
 ///
 /// Either `Result::Ok` with the parsed AST root or `Err` with an error message.
 pub fn parse(input: &Vec<Token>) -> Result<Stmt, String> {
-    let mut parser = Parser {
-        input: input,
-        index: 0,
-    };
+    let mut parser = Parser { input, index: 0 };
     parser.parse_stmt()
 }
 
@@ -132,7 +129,7 @@ impl<'a> Parser<'a> {
             Token::Let => {
                 self.next();
                 self.parse_binding()?
-            },
+            }
             _ => Stmt::Eval(self.parse_expr()?),
         };
 
@@ -146,21 +143,26 @@ impl<'a> Parser<'a> {
     fn parse_binding<'s>(&'s mut self) -> Result<Stmt, String> {
         let ident = match *self.next() {
             Token::Ident(ref s) => s,
-            _ => try!(Result::Err("Expected identifier")),
+            _ => Result::Err("Expected identifier")?,
         };
 
         match *self.current() {
             Token::LParen => {
                 self.next();
-                let (param_idents, expr) = try!(self.parse_fun_binding());
+                let (param_idents, expr) = self.parse_fun_binding()?;
                 Result::Ok(Stmt::FunBind(ident.clone(), param_idents, expr))
-            },
+            }
             Token::Eq => {
                 self.next();
-                let expr = try!(self.parse_var_binding());
+                let expr = self.parse_var_binding()?;
                 Result::Ok(Stmt::VarBind(ident.clone(), expr))
-            },
-            _ => Err(format!("Expected {:?} or {:?}, found {:?}", Token::LParen, Token::Eq, self.current())),
+            }
+            _ => Err(format!(
+                "Expected {:?} or {:?}, found {:?}",
+                Token::LParen,
+                Token::Eq,
+                self.current()
+            )),
         }
     }
 
@@ -172,20 +174,20 @@ impl<'a> Parser<'a> {
             Token::RParen => {
                 self.next();
                 vec![]
-            },
+            }
             Token::Ident(_) => {
-                let idents = try!(self.parse_ident_list());
-                try!(self.assert_current(Token::RParen));
+                let idents = self.parse_ident_list()?;
+                self.assert_current(Token::RParen)?;
                 self.next();
                 idents
-            },
-            _ => try!(Result::Err(format!("Expected identifier or {:?}", Token::RParen))),
+            }
+            _ => Result::Err(format!("Expected identifier or {:?}", Token::RParen))?,
         };
 
-        try!(self.assert_current(Token::Eq));
+        self.assert_current(Token::Eq)?;
         self.next();
 
-        let expr = try!(self.parse_expr());
+        let expr = self.parse_expr()?;
         Result::Ok((param_idents, expr))
     }
 
@@ -198,7 +200,7 @@ impl<'a> Parser<'a> {
                 idents.push(ident.clone());
                 self.next();
             } else {
-                try!(Result::Err("Expected identifier"));
+                Result::Err("Expected identifier")?;
             }
 
             match *self.current() {
@@ -217,14 +219,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expr<'s>(&'s mut self) -> Result<Expr, String> {
-        let mut left = try!(self.parse_term());
+        let mut left = self.parse_term()?;
 
         loop {
             match *self.current() {
                 Token::At => {
                     self.next();
-                    left = Expr::Concat(left.boxed(), try!(self.parse_term()).boxed())
-                },
+                    left = Expr::Concat(left.boxed(), self.parse_term()?.boxed())
+                }
                 _ => break,
             };
         }
@@ -233,30 +235,30 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_term<'s>(&'s mut self) -> Result<Expr, String> {
-        let mut left = try!(self.parse_product());
+        let mut left = self.parse_product()?;
 
         loop {
             match *self.current() {
                 Token::Plus => {
                     self.next();
-                    left = Expr::Plus(left.boxed(), try!(self.parse_product()).boxed())
-                },
+                    left = Expr::Plus(left.boxed(), self.parse_product()?.boxed())
+                }
                 Token::Minus => {
                     self.next();
-                    left = Expr::Minus(left.boxed(), try!(self.parse_product()).boxed())
-                },
+                    left = Expr::Minus(left.boxed(), self.parse_product()?.boxed())
+                }
                 Token::Ampersand => {
                     self.next();
-                    left = Expr::BitwiseAnd(left.boxed(), try!(self.parse_product()).boxed())
-                },
+                    left = Expr::BitwiseAnd(left.boxed(), self.parse_product()?.boxed())
+                }
                 Token::VBar => {
                     self.next();
-                    left = Expr::BitwiseOr(left.boxed(), try!(self.parse_product()).boxed())
-                },
+                    left = Expr::BitwiseOr(left.boxed(), self.parse_product()?.boxed())
+                }
                 Token::Caret => {
                     self.next();
-                    left = Expr::BitwiseXor(left.boxed(), try!(self.parse_product()).boxed())
-                },
+                    left = Expr::BitwiseXor(left.boxed(), self.parse_product()?.boxed())
+                }
                 _ => break,
             };
         }
@@ -265,38 +267,38 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_product<'s>(&'s mut self) -> Result<Expr, String> {
-        let mut left = try!(self.parse_molecule());
+        let mut left = self.parse_molecule()?;
 
         loop {
             match *self.current() {
                 Token::Star => {
                     self.next();
-                    left = Expr::Times(left.boxed(), try!(self.parse_molecule()).boxed())
-                },
+                    left = Expr::Times(left.boxed(), self.parse_molecule()?.boxed())
+                }
                 Token::Slash => {
                     self.next();
-                    left = Expr::Div(left.boxed(), try!(self.parse_molecule()).boxed())
-                },
+                    left = Expr::Div(left.boxed(), self.parse_molecule()?.boxed())
+                }
                 Token::Backslash => {
                     self.next();
-                    left = Expr::IntDiv(left.boxed(), try!(self.parse_molecule()).boxed())
-                },
+                    left = Expr::IntDiv(left.boxed(), self.parse_molecule()?.boxed())
+                }
                 Token::Percent => {
                     self.next();
-                    left = Expr::Mod(left.boxed(), try!(self.parse_molecule()).boxed())
-                },
+                    left = Expr::Mod(left.boxed(), self.parse_molecule()?.boxed())
+                }
                 Token::LtLt => {
                     self.next();
-                    left = Expr::ShiftLeft(left.boxed(), try!(self.parse_molecule()).boxed())
-                },
+                    left = Expr::ShiftLeft(left.boxed(), self.parse_molecule()?.boxed())
+                }
                 Token::GtGt => {
                     self.next();
-                    left = Expr::ShiftRight(left.boxed(), try!(self.parse_molecule()).boxed())
-                },
+                    left = Expr::ShiftRight(left.boxed(), self.parse_molecule()?.boxed())
+                }
                 Token::DotWord => {
                     self.next();
-                    left = Expr::DotProduct(left.boxed(), try!(self.parse_molecule()).boxed())
-                },
+                    left = Expr::DotProduct(left.boxed(), self.parse_molecule()?.boxed())
+                }
                 _ => break,
             };
         }
@@ -305,18 +307,18 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_molecule<'s>(&'s mut self) -> Result<Expr, String> {
-        let mut left = try!(self.parse_atom());
+        let mut left = self.parse_atom()?;
 
         loop {
             match *self.current() {
                 Token::StarStar => {
                     self.next();
-                    left = Expr::Pow(left.boxed(), try!(self.parse_atom()).boxed())
-                },
+                    left = Expr::Pow(left.boxed(), self.parse_atom()?.boxed())
+                }
                 Token::Log => {
                     self.next();
-                    left = Expr::Log(left.boxed(), try!(self.parse_atom()).boxed())
-                },
+                    left = Expr::Log(left.boxed(), self.parse_atom()?.boxed())
+                }
                 _ => break,
             };
         }
@@ -355,17 +357,17 @@ impl<'a> Parser<'a> {
                         self.next();
                         let args = self.parse_fun_call()?;
                         Expr::FunCall(ident, args.boxed())
-                    },
+                    }
                     _ => Expr::BindingRef(ident),
                 }
-            },
+            }
             Token::LBracket => self.parse_vector()?,
             Token::LParen => {
                 let inner = self.parse_term()?;
                 self.assert_current(Token::RParen)?;
                 self.next();
                 inner
-            },
+            }
             _ => Result::Err(format!("Expected atom, found {:?}", self.current()))?,
         };
 
@@ -381,13 +383,13 @@ impl<'a> Parser<'a> {
             Token::RParen => {
                 self.next();
                 vec![]
-            },
+            }
             _ => {
                 let exprs = self.parse_expr_list()?;
                 self.assert_current(Token::RParen)?;
                 self.next();
                 exprs
-            },
+            }
         };
 
         Result::Ok(expr_list)
@@ -426,14 +428,17 @@ impl<'a> Parser<'a> {
                 let mut exprs = vec![expr1];
                 exprs.append(&mut tail_exprs);
                 Expr::Vector(exprs.boxed())
-            },
+            }
             Token::DotDot => {
                 let range = self.parse_range(expr1)?;
                 self.assert_current(Token::RBracket)?;
                 self.next();
                 Expr::RangeVector(range.boxed())
-            },
-            _ => Result::Err(format!("Expected Comma, RBracket or DotDot, found {:?}", self.current()))?,
+            }
+            _ => Result::Err(format!(
+                "Expected Comma, RBracket or DotDot, found {:?}",
+                self.current()
+            ))?,
         };
 
         Result::Ok(res_expr)
@@ -442,7 +447,7 @@ impl<'a> Parser<'a> {
     // [0..10]
     // [0..10:2]
     //     ^
-    fn parse_range<'s>(&'s mut self, lower: Expr) -> Result<Range, String> {
+    fn parse_range(&mut self, lower: Expr) -> Result<Range, String> {
         let upper = self.parse_expr()?;
         let step = if *self.current() == Token::Colon {
             self.next();
@@ -454,7 +459,7 @@ impl<'a> Parser<'a> {
         Result::Ok(Range {
             incl_lower_bound: lower,
             excl_upper_bound: upper,
-            step: step,
+            step,
         })
     }
 }
@@ -478,73 +483,103 @@ mod tests {
         // 1 + 2
         let input = vec![Token::Integer(1), Token::Plus, Token::Integer(2)];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::Eval(Expr::Plus(integer_expr(1).boxed(), integer_expr(2).boxed())));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::Plus(integer_expr(1).boxed(), integer_expr(2).boxed()))
+        );
     }
 
     #[test]
     fn test_parse_lassoc_term() {
         // 2 - 1 - 1 = (2 - 1) - 1
-        let input = vec![Token::Integer(2), Token::Minus, Token::Integer(1), Token::Minus, Token::Integer(1)];
+        let input = vec![
+            Token::Integer(2),
+            Token::Minus,
+            Token::Integer(1),
+            Token::Minus,
+            Token::Integer(1),
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::Eval(
-                       Expr::Minus(
-                           Expr::Minus(integer_expr(2).boxed(), integer_expr(1).boxed()).boxed(),
-                           integer_expr(1).boxed())));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::Minus(
+                Expr::Minus(integer_expr(2).boxed(), integer_expr(1).boxed()).boxed(),
+                integer_expr(1).boxed()
+            ))
+        );
     }
 
     #[test]
     fn test_parse_lassoc_product() {
         // 12 / 2 / 2 = (12 / 2) / 2
-        let input = vec![Token::Integer(12), Token::Slash, Token::Integer(2), Token::Slash, Token::Integer(2)];
+        let input = vec![
+            Token::Integer(12),
+            Token::Slash,
+            Token::Integer(2),
+            Token::Slash,
+            Token::Integer(2),
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::Eval(
-                       Expr::Div(
-                           Expr::Div(integer_expr(12).boxed(), integer_expr(2).boxed()).boxed(),
-                           integer_expr(2).boxed())));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::Div(
+                Expr::Div(integer_expr(12).boxed(), integer_expr(2).boxed()).boxed(),
+                integer_expr(2).boxed()
+            ))
+        );
     }
 
     #[test]
     fn test_parse_complex() {
         // (1 + 2) * (5 - x)
-        let input = vec![Token::LParen,
-                         Token::Integer(1),
-                         Token::Plus,
-                         Token::Integer(2),
-                         Token::RParen,
-                         Token::Star,
-                         Token::LParen,
-                         Token::Integer(5),
-                         Token::Minus,
-                         Token::Ident("x".to_string()),
-                         Token::RParen];
+        let input = vec![
+            Token::LParen,
+            Token::Integer(1),
+            Token::Plus,
+            Token::Integer(2),
+            Token::RParen,
+            Token::Star,
+            Token::LParen,
+            Token::Integer(5),
+            Token::Minus,
+            Token::Ident("x".to_string()),
+            Token::RParen,
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::Eval(
-                       Expr::Times(
-                           Expr::Plus(integer_expr(1).boxed(), integer_expr(2).boxed()).boxed(),
-                           Expr::Minus(integer_expr(5).boxed(), Expr::BindingRef("x".to_string()).boxed()).boxed())));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::Times(
+                Expr::Plus(integer_expr(1).boxed(), integer_expr(2).boxed()).boxed(),
+                Expr::Minus(
+                    integer_expr(5).boxed(),
+                    Expr::BindingRef("x".to_string()).boxed()
+                )
+                .boxed()
+            ))
+        );
     }
 
     #[test]
     fn test_parse_multi_parens() {
         // (((1)) + (2))
-        let input = vec![Token::LParen,
-                         Token::LParen,
-                         Token::LParen,
-                         Token::Integer(1),
-                         Token::RParen,
-                         Token::RParen,
-                         Token::Plus,
-                         Token::LParen,
-                         Token::Integer(2),
-                         Token::RParen,
-                         Token::RParen];
+        let input = vec![
+            Token::LParen,
+            Token::LParen,
+            Token::LParen,
+            Token::Integer(1),
+            Token::RParen,
+            Token::RParen,
+            Token::Plus,
+            Token::LParen,
+            Token::Integer(2),
+            Token::RParen,
+            Token::RParen,
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::Eval(Expr::Plus(integer_expr(1).boxed(), integer_expr(2).boxed())));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::Plus(integer_expr(1).boxed(), integer_expr(2).boxed()))
+        );
     }
 
     #[test]
@@ -578,7 +613,12 @@ mod tests {
     #[test]
     fn test_parse_fail_5() {
         // (1 + 2
-        let input = vec![Token::LParen, Token::Integer(1), Token::Plus, Token::Integer(2)];
+        let input = vec![
+            Token::LParen,
+            Token::Integer(1),
+            Token::Plus,
+            Token::Integer(2),
+        ];
         assert!(parse(&input).is_err());
     }
 
@@ -592,56 +632,76 @@ mod tests {
     #[test]
     fn test_parse_variable_binding() {
         // let x = 1
-        let input = vec![Token::Let, Token::Ident("x".to_string()), Token::Eq, Token::Integer(1)];
+        let input = vec![
+            Token::Let,
+            Token::Ident("x".to_string()),
+            Token::Eq,
+            Token::Integer(1),
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::VarBind("x".to_string(), integer_expr(1)));
+        assert_eq!(stmt, Stmt::VarBind("x".to_string(), integer_expr(1)));
     }
 
     #[test]
     fn test_parse_function_binding_1() {
         // let f() = 1
-        let input = vec![Token::Let,
-                         Token::Ident("f".to_string()),
-                         Token::LParen,
-                         Token::RParen,
-                         Token::Eq,
-                         Token::Integer(1)];
+        let input = vec![
+            Token::Let,
+            Token::Ident("f".to_string()),
+            Token::LParen,
+            Token::RParen,
+            Token::Eq,
+            Token::Integer(1),
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::FunBind("f".to_string(), vec![], integer_expr(1)));
+        assert_eq!(
+            stmt,
+            Stmt::FunBind("f".to_string(), vec![], integer_expr(1))
+        );
     }
 
     #[test]
     fn test_parse_function_binding_2() {
         // let f(a) = 1
-        let input = vec![Token::Let,
-                         Token::Ident("f".to_string()),
-                         Token::LParen,
-                         Token::Ident("a".to_string()),
-                         Token::RParen,
-                         Token::Eq,
-                         Token::Integer(1)];
+        let input = vec![
+            Token::Let,
+            Token::Ident("f".to_string()),
+            Token::LParen,
+            Token::Ident("a".to_string()),
+            Token::RParen,
+            Token::Eq,
+            Token::Integer(1),
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::FunBind("f".to_string(), vec!["a".to_string()], integer_expr(1)));
+        assert_eq!(
+            stmt,
+            Stmt::FunBind("f".to_string(), vec!["a".to_string()], integer_expr(1))
+        );
     }
 
     #[test]
     fn test_parse_function_binding_3() {
         // let f(a, b) = 1
-        let input = vec![Token::Let,
-                         Token::Ident("f".to_string()),
-                         Token::LParen,
-                         Token::Ident("a".to_string()),
-                         Token::Comma,
-                         Token::Ident("b".to_string()),
-                         Token::RParen,
-                         Token::Eq,
-                         Token::Integer(1)];
+        let input = vec![
+            Token::Let,
+            Token::Ident("f".to_string()),
+            Token::LParen,
+            Token::Ident("a".to_string()),
+            Token::Comma,
+            Token::Ident("b".to_string()),
+            Token::RParen,
+            Token::Eq,
+            Token::Integer(1),
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::FunBind("f".to_string(), vec!["a".to_string(), "b".to_string()], integer_expr(1)));
+        assert_eq!(
+            stmt,
+            Stmt::FunBind(
+                "f".to_string(),
+                vec!["a".to_string(), "b".to_string()],
+                integer_expr(1)
+            )
+        );
     }
 
     #[test]
@@ -649,52 +709,78 @@ mod tests {
         // f()
         let input = vec![Token::Ident("f".to_string()), Token::LParen, Token::RParen];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::Eval(Expr::FunCall("f".to_string(), Box::new(vec![]))));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::FunCall("f".to_string(), Box::new(vec![])))
+        );
     }
 
     #[test]
     fn test_parse_function_call_2() {
         // f(1)
-        let input = vec![Token::Ident("f".to_string()), Token::LParen, Token::Integer(1), Token::RParen];
+        let input = vec![
+            Token::Ident("f".to_string()),
+            Token::LParen,
+            Token::Integer(1),
+            Token::RParen,
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::Eval(Expr::FunCall("f".to_string(), Box::new(vec![integer_expr(1)]))));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::FunCall(
+                "f".to_string(),
+                Box::new(vec![integer_expr(1)])
+            ))
+        );
     }
 
     #[test]
     fn test_parse_function_call_3() {
         // f(1, 2)
-        let input = vec![Token::Ident("f".to_string()),
-                         Token::LParen,
-                         Token::Integer(1),
-                         Token::Comma,
-                         Token::Integer(2),
-                         Token::RParen];
+        let input = vec![
+            Token::Ident("f".to_string()),
+            Token::LParen,
+            Token::Integer(1),
+            Token::Comma,
+            Token::Integer(2),
+            Token::RParen,
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::Eval(Expr::FunCall("f".to_string(),
-                              Box::new(vec![integer_expr(1), integer_expr(2)]))));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::FunCall(
+                "f".to_string(),
+                Box::new(vec![integer_expr(1), integer_expr(2)])
+            ))
+        );
     }
 
     #[test]
     fn test_parse_function_call_4() {
         // f(1, (2 + 3))
-        let input = vec![Token::Ident("f".to_string()),
-                         Token::LParen,
-                         Token::Integer(1),
-                         Token::Comma,
-                         Token::LParen,
-                         Token::Integer(2),
-                         Token::Plus,
-                         Token::Integer(3),
-                         Token::RParen,
-                         Token::RParen];
+        let input = vec![
+            Token::Ident("f".to_string()),
+            Token::LParen,
+            Token::Integer(1),
+            Token::Comma,
+            Token::LParen,
+            Token::Integer(2),
+            Token::Plus,
+            Token::Integer(3),
+            Token::RParen,
+            Token::RParen,
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt,
-                   Stmt::Eval(Expr::FunCall("f".to_string(),
-                              Box::new(vec![integer_expr(1),
-                                            Expr::Plus(integer_expr(2).boxed(), integer_expr(3).boxed())]))));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::FunCall(
+                "f".to_string(),
+                Box::new(vec![
+                    integer_expr(1),
+                    Expr::Plus(integer_expr(2).boxed(), integer_expr(3).boxed())
+                ])
+            ))
+        );
     }
 
     #[test]
@@ -709,26 +795,47 @@ mod tests {
 
         let input = vec![Token::Minus, Token::Sin, Token::Integer(10)];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt, Stmt::Eval(Expr::Neg(Expr::Sin(integer_expr(10).boxed()).boxed())));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::Neg(Expr::Sin(integer_expr(10).boxed()).boxed()))
+        );
     }
 
     #[test]
     fn test_vector_single_item() {
         let input = vec![Token::LBracket, Token::Integer(1), Token::RBracket];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt, Stmt::Eval(Expr::Vector(vec![integer_expr(1)].boxed())));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::Vector(vec![integer_expr(1)].boxed()))
+        );
     }
 
     #[test]
     fn test_vector_multiple_items() {
-        let input = vec![Token::LBracket, Token::Integer(1), Token::Comma, Token::Integer(2), Token::RBracket];
+        let input = vec![
+            Token::LBracket,
+            Token::Integer(1),
+            Token::Comma,
+            Token::Integer(2),
+            Token::RBracket,
+        ];
         let stmt = parse(&input).unwrap();
-        assert_eq!(stmt, Stmt::Eval(Expr::Vector(vec![integer_expr(1), integer_expr(2)].boxed())));
+        assert_eq!(
+            stmt,
+            Stmt::Eval(Expr::Vector(vec![integer_expr(1), integer_expr(2)].boxed()))
+        );
     }
 
     #[test]
     fn test_range_vector() {
-        let input = vec![Token::LBracket, Token::Integer(1), Token::DotDot, Token::Integer(5), Token::RBracket];
+        let input = vec![
+            Token::LBracket,
+            Token::Integer(1),
+            Token::DotDot,
+            Token::Integer(5),
+            Token::RBracket,
+        ];
         let stmt = parse(&input).unwrap();
         let range = Range {
             incl_lower_bound: integer_expr(1),
@@ -740,13 +847,15 @@ mod tests {
 
     #[test]
     fn test_range_vector_with_step() {
-        let input = vec![Token::LBracket,
-                         Token::Integer(1),
-                         Token::DotDot,
-                         Token::Integer(5),
-                         Token::Colon,
-                         Token::Integer(2),
-                         Token::RBracket];
+        let input = vec![
+            Token::LBracket,
+            Token::Integer(1),
+            Token::DotDot,
+            Token::Integer(5),
+            Token::Colon,
+            Token::Integer(2),
+            Token::RBracket,
+        ];
         let stmt = parse(&input).unwrap();
         let range = Range {
             incl_lower_bound: integer_expr(1),

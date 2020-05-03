@@ -44,7 +44,7 @@ pub enum Token {
 }
 
 pub struct Lexer {
-    token_map: Vec<(Regex, Box<Fn(&str) -> Token>)>,
+    token_map: Vec<(Regex, Box<dyn Fn(&str) -> Token>)>,
 }
 
 impl Lexer {
@@ -82,7 +82,7 @@ impl Lexer {
 
 // ============================================================================
 
-fn create_token_map() -> Vec<(Regex, Box<Fn(&str) -> Token>)> {
+fn create_token_map() -> Vec<(Regex, Box<dyn Fn(&str) -> Token>)> {
     let create_regex = |s| Regex::new(s).unwrap();
     vec![
         (

@@ -32,7 +32,7 @@ pub use value::Value;
 /// assert_eq!(calculator.calc(r"it + 1"),
 ///            Result::Ok(&RuntimeItem::Value(Value::Integer(2))));
 /// ```
-pub static IT_IDENT: &'static str = "it";
+pub static IT_IDENT: &str = "it";
 
 /// The top-level calculator class.
 ///
@@ -44,9 +44,15 @@ pub static IT_IDENT: &'static str = "it";
 /// assert_eq!(calculator.calc("1 + 1"), Result::Ok(&RuntimeItem::Value(Value::Integer(2))));
 /// ```
 pub struct Calculator {
-    ctx: Box<Context>,
+    ctx: Box<dyn Context>,
     lexer: Lexer,
     arithm_regex: Regex,
+}
+
+impl Default for Calculator {
+    fn default() -> Self {
+        Calculator::new()
+    }
 }
 
 impl Calculator {
@@ -149,7 +155,7 @@ impl Calculator {
                     for (ident, item) in map.iter() {
                         self.ctx.put(ident, item.clone());
                     }
-                    if let &RuntimeItem::Value(ref val) = map.get(IT_IDENT).unwrap() {
+                    if let RuntimeItem::Value(ref val) = *map.get(IT_IDENT).unwrap() {
                         its.push(val.clone());
                     };
                 }
@@ -173,7 +179,7 @@ impl Calculator {
         };
         writer.write_all(b"{\n")?;
         for (ident, item) in item_tuples {
-            if let &RuntimeItem::Value(ref val) = item {
+            if let RuntimeItem::Value(ref val) = *item {
                 write!(writer, "    \"{}\": ", &ident)?;
                 val.write_json(writer)?;
                 writer.write_all(b",\n")?;

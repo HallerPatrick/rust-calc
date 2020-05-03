@@ -146,7 +146,7 @@ pub trait Context {
 /// Returns a boxed object that implements the `Context` trait based
 /// on the given `map` that is used to keep variable values.
 pub fn context_from_hashmap(map: HashMap<String, RuntimeItem>) -> Box<dyn Context> {
-    Box::new(MapContext { map: map })
+    Box::new(MapContext { map })
 }
 
 // ============================================================================
